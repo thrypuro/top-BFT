@@ -35,7 +35,18 @@
 
 #include "Enclave.h"
 #include "Enclave_t.h"  /* print_string */
+#include <sgx_tcrypto.h>
 
+// shared key for every node in the network
+sgx_ec256_dh_shared_t p_shared_key[10][10];
+
+// this key is used if you are leader node or replica node
+sgx_ec256_dh_shared_t root_shared_key;
+
+sgx_ec256_private_t private_key;
+sgx_ec256_public_t public_key;
+
+using namespace std;
 /* 
  * printf: 
  *   Invokes OCALL to display the enclave buffer to the terminal.
@@ -53,5 +64,100 @@ void printf(const char *fmt, ...)
 void printf_helloworld()
 {
     printf("Hello World\n");
+}
+
+
+// generate Elliptic curve key pair
+
+void generate_key_pair(sgx_ec256_private_t &private_key, sgx_ec256_public_t &public_key)
+{
+    sgx_ecc_state_handle_t ecc_handle = NULL;
+    sgx_status_t ret = SGX_ERROR_UNEXPECTED;
+    ret = sgx_ecc256_open_context(&ecc_handle);
+    if (ret != SGX_SUCCESS)
+    {
+        printf("sgx_ecc256_open_context failed [%s].\n", __FUNCTION__);
+        return;
+    }
+    ret = sgx_ecc256_create_key_pair(&private_key, &public_key, ecc_handle);
+    if (ret != SGX_SUCCESS)
+    {
+        printf("sgx_ecc256_create_key_pair failed [%s].\n", __FUNCTION__);
+        return;
+    }
+    ret = sgx_ecc256_close_context(ecc_handle);
+    if (ret != SGX_SUCCESS)
+    {
+        printf("sgx_ecc256_close_context failed [%s].\n", __FUNCTION__);
+        return;
+    }
+    printf("generate key pair success\n");
+}
+
+
+/*
+ * Generate public key and private key and sets the public key in the parameter
+ * arg : public key
+ */
+
+void ecall_generate_PublicKey( uint8_t publicKey[64])
+{
+    generate_key_pair( private_key, public_key);
+
+    for (int i = 0; i < 64; i++)
+    {
+        publicKey[i] = public_key.gx[i] ;
+        publicKey[i+32] =  public_key.gy[i];
+    }
+
+}
+
+
+/*
+ * Generate shared key and sets the shared key in the parameter
+ * arg : public key
+ */
+void generate_sharedKey(uint8_t publicKey[64], sgx_ec256_dh_shared_t shared_key)
+{
+    sgx_ec256_public_t public_key;
+    sgx_ec256_dh_shared_t *p_shared_key = &shared_key;
+    sgx_ec256_public_t *p_public_key = &public_key;
+
+    for (int i = 0; i < 32; i++)
+    {
+        p_public_key->gx[i] = publicKey[i];
+        p_public_key->gy[i] = publicKey[i+32];
+    }
+
+    sgx_ecc_state_handle_t ecc_handle = NULL;
+    sgx_status_t ret = SGX_ERROR_UNEXPECTED;
+    ret = sgx_ecc256_open_context(&ecc_handle);
+    if (ret != SGX_SUCCESS)
+    {
+        printf("sgx_ecc256_open_context failed [%s].\n", __FUNCTION__);
+        return;
+    }
+    ret = sgx_ecc256_compute_shared_dhkey(&private_key, p_public_key, p_shared_key, ecc_handle);
+    if (ret != SGX_SUCCESS)
+    {
+        printf("sgx_ecc256_compute_shared_dhkey failed [%s].\n", __FUNCTION__);
+        return;
+    }
+    ret = sgx_ecc256_close_context(ecc_handle);
+    if (ret != SGX_SUCCESS)
+    {
+        printf("sgx_ecc256_close_context failed [%s].\n", __FUNCTION__);
+        return;
+    }
+
+}
+
+/*
+ * Generate shared key and sets the shared key in the parameter
+ * arg : public key
+ */
+void ecall_root_sharedKey(uint8_t publicKey[64])
+{
+    generate_sharedKey(publicKey, root_shared_key);
 }
 

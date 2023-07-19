@@ -41,6 +41,9 @@ enclave {
     
     trusted {
         public void printf_helloworld();
+        public void ecall_generate_PublicKey([out]uint8_t publicKey[64]);
+        public void ecall_root_sharedKey([in]uint8_t publicKey[64]);
+
     };
 
     /* 

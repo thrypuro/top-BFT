@@ -36,12 +36,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include "json.hpp"
-#include <fstream>
 # include <unistd.h>
 # include <pwd.h>
 #include <iostream>
-
+#include "utils.h"
 # define MAX_PATH FILENAME_MAX
 
 #include "sgx_urts.h"
@@ -50,12 +48,13 @@
 
 #include "Leader.h"
 #include "Root.h"
+#include "Replica.h"
+
 // get opt arg
 #include <unistd.h>
 using namespace std;
 
-/* Global EID shared by multiple threads */
-sgx_enclave_id_t global_eid = 0;
+sgx_enclave_id_t global_eid=0;
 
 typedef struct _sgx_errlist_t {
     sgx_status_t err;
@@ -210,13 +209,9 @@ int SGX_CDECL main(int argc, char *argv[])
     cout << "Node index is " << node_index << endl;
 
 
-    ifstream f1("Primary_config.json");
-    if (!f1){
-        cout << "Error opening file" << std :: endl;
-        exit(1);
-    }
-    nlohmann::json j1;
-    f1 >> j1;
+
+    nlohmann::json j1 = read_json_file("Primary_config.json");
+
     int total_primary_nodes = j1["Primary_nodes"];
     int total_replica_nodes = j1["Replica_nodes"];
     int total_passive_nodes = j1["Passive_nodes"];
@@ -242,18 +237,28 @@ int SGX_CDECL main(int argc, char *argv[])
         cout << "Root node" << endl;
 
         // Root(int total_primary, int total_replica, int total_passive)
-        Root r = Root(total_primary_nodes, total_replica_nodes, total_passive_nodes, total_node_address);
+        Root r = Root(total_primary_nodes, total_replica_nodes, total_passive_nodes
+                      , total_node_address, global_eid);
         r.start();
-        delete &r;
 
     }
     else if (node_index % total_nodes_in_partition == 0){
         // leader logic
+        Leader l = Leader(node_index,total_replica_nodes, total_passive_nodes, global_eid);
         cout << "Leader node" << endl;
+        l.run();
     }
     else if (node_index % total_nodes_in_partition <= total_replica_nodes){
        // Replica logic
         cout << "Replica node" << endl;
+        int leader_index = node_index - (serial_number);
+        // pesky edge case
+        if (leader_index < 0){
+            cout << "Leader index is less than 0" << endl;
+            exit(1);
+        }
+        Replica r = Replica(node_index,serial_number,view_number,leader_index, global_eid);
+        r.run();
     }
     else{
        // Passive logic
