@@ -40,10 +40,12 @@ enclave {
      */
     
     trusted {
-        public void printf_helloworld();
+        public void ecall_root_size(int L_size, int R_size);
+        public void printf_helloworld1();
         public void ecall_generate_PublicKey([out]uint8_t publicKey[64]);
         public void ecall_root_sharedKey([in]uint8_t publicKey[64]);
-
+        public void ecall_setNodeKey([in]uint8_t publicKey[64], int serial_index, int view_index);
+        public void ecall_leader_issueSecret(int Serial_num, [out] uint8_t * p_dst);
     };
 
     /* 

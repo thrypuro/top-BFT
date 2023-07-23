@@ -9,6 +9,7 @@ sgx_enclave_id_t global_eid_replica;
 using namespace std;
 
 Replica ::Replica() {
+
 }
 
 
@@ -30,17 +31,20 @@ void Replica :: run() {
     int port = j1[to_string(node_index)]["port"];
 
 
-    int replica_address = start_port(port);
+    int leader_address = start_port(port);
 
     uint8_t ver_public_key[64];
 
-    receive_message(replica_address, ver_public_key, 64);
+    receive_message(leader_address, ver_public_key, 64);
 
    cout << "Dumb key : " << ver_public_key << endl;
 
    uint8_t  public_key[64];
     ecall_generate_PublicKey(global_eid_replica, public_key);
 
-    ecall_root_sharedKey(global_eid_replica,public_key);
+    ecall_root_sharedKey(global_eid_replica,ver_public_key);
 
+    cout << "Public key : " << public_key << endl;
+
+    send_message(leader_address, public_key, 64);
 }

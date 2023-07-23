@@ -33,6 +33,9 @@ Leader ::Leader( int node_index,int total_replica_nodes,
 
 void Leader :: run (){
 
+    /**
+     * Initialisation phase
+     */
     nlohmann::json j1 = read_json_file("node_addresses.json");
 
     int root_address = start_port(j1[to_string(node_index)] ["port"]);
@@ -44,7 +47,6 @@ void Leader :: run (){
     receive_message(root_address, root_public_key, 64);
 
     cout << "Leader received root public key" << root_public_key << endl;
-
     cout << "Leader sending root public key to passive nodes" << endl;
     // send root public key to all replica nodes
     for(int i = 0; i < total_replica_nodes; i++){
@@ -57,22 +59,37 @@ void Leader :: run (){
         send_message(replica_address[i], root_public_key, 64);
     }
 
-
     uint8_t  public_key[64];
+    // Generate leader's public key and shared key with root
     ecall_generate_PublicKey(global_eid_root, public_key);
+    ecall_root_sharedKey(global_eid_root,root_public_key);
 
-    ecall_root_sharedKey(global_eid_root,public_key);
 
+    // Send leader's and Replica's public key to root
+    send_message(root_address, public_key, 64);
     for (int i = 0; i < total_replica_nodes; i++) {
         uint8_t  temp_public_key[64];
         receive_message(replica_address[i], temp_public_key, 64);
         send_message(root_address, temp_public_key, 64);
     }
-    send_message(root_address, public_key, 64);
+
+    /**
+     * Initialisation Phase done
+     */
+
+    /**
+     * Pre-prepare phase
+     */
+
+    // while (true){
+
+    // Leader receives a request from client
+
+    // Leader Request a set of secret-shares from the root node
 
 
 
-
+    // }
 }
 
 
