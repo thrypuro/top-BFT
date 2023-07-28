@@ -87,23 +87,31 @@ int start_port( int port ) {
 
 
 int send_message(int sockfd, uint8_t *message, int size) {
-    int ret;
+    ssize_t ret = -1;
+
     ret = send(sockfd, message, size * sizeof(uint8_t), 0);
     if (ret < 0) {
         printf("Error sending message\n");
         exit(1);
     }
-    return ret;
+
+    return 0;
 }
 
 int receive_message(int sockfd, uint8_t *message, int size) {
-    int ret;
+    ssize_t ret;
     ret = recv(sockfd, message, size* sizeof(uint8_t), 0);
+    if (size == 4){
+        // print bytes in hex
+        for (int i = 0; i < 4; i++){
+            std :: cout << std :: hex << (int) message[i] << std :: endl;
+        }
+    }
     if (ret < 0) {
         printf("Error receiving message\n");
         exit(1);
     }
-    return ret;
+    return 0;
 }
 
 nlohmann::json read_json_file(const char *filename) {
@@ -115,4 +123,120 @@ nlohmann::json read_json_file(const char *filename) {
     nlohmann::json j;
     i >> j;
     return j;
+}
+
+// convert 64 bit uint to 8 bytes
+void uint64_to_bytes(uint64_t num, uint8_t * bytes)
+{
+    for (int i = 0; i < 8; i++)
+    {
+        bytes[i] = (num >> (8 * i)) & 0xff;
+    }
+}
+
+int send_json(int sockfd, nlohmann::json j)
+{
+    std::string s = j.dump();
+    // send size of message first so that receiver knows how much to receive
+
+
+    uint8_t bytes[8] = {0};
+    uint64_to_bytes( s.size(), bytes);
+    send_message(sockfd, bytes, 8);
+
+    std :: cout << "Sending json " << s << std::endl;
+
+   send_message(sockfd, (uint8_t *) s.c_str(), s.size());
+
+    return 0;
+
+}
+
+int receive_json(int sockfd, nlohmann::json * j)
+{
+    int size = 0;
+        uint8_t bytes[8] = {0};
+        receive_message(sockfd, bytes, 8);
+        for (int i = 0; i < 8; i++) {
+            size += ( bytes[i]) << (8 * i);
+        }
+
+
+
+
+    std :: cout << "Size of json is " << size << std::endl;
+    auto *buffer = new uint8_t [size];
+     receive_message(sockfd, buffer, (int) size);
+     // print buffer
+     std :: cout << "Buffer is " << buffer << std::endl;
+
+    *j = nlohmann::json::parse(buffer);
+
+    delete [] buffer;
+
+    return 0;
+}
+
+
+std::string string_to_hex(const std::string& input)
+{
+    static const char hex_digits[] = "0123456789ABCDEF";
+
+    std::string output;
+    output.reserve(input.length() * 2);
+    for (unsigned char c : input)
+    {
+        output.push_back(hex_digits[c >> 4]);
+        output.push_back(hex_digits[c & 15]);
+    }
+    return output;
+}
+
+
+int hex_value(unsigned char hex_digit)
+{
+    static const signed char hex_values[256] = {
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            0,  1,  2,  3,  4,  5,  6,  7,  8,  9, -1, -1, -1, -1, -1, -1,
+            -1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    };
+    int value = hex_values[hex_digit];
+    if (value == -1) throw std::invalid_argument("invalid hex digit");
+    return value;
+}
+
+std::string hex_to_string(const std::string& input)
+{
+    const auto len = input.length();
+    if (len & 1) throw std::invalid_argument("odd length");
+
+    std::string output;
+    output.reserve(len / 2);
+    for (auto it = input.begin(); it != input.end(); )
+    {
+        int hi = hex_value(*it++);
+        int lo = hex_value(*it++);
+        output.push_back(hi << 4 | lo);
+    }
+    return output;
+}
+
+void string_to_uint8( const std::string& input, size_t len, uint8_t * output)
+{
+    for (int i = 0; i < len; i++){
+        output[i] = (uint8_t) input[i];
+    }
 }

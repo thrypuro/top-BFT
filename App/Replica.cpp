@@ -47,4 +47,9 @@ void Replica :: run() {
     cout << "Public key : " << public_key << endl;
 
     send_message(leader_address, public_key, 64);
+    nlohmann :: json j2;
+    receive_json(leader_address, &j2);
+
+
+
 }

@@ -13,6 +13,7 @@
 #include <string>
 #include "Enclave_u.h"
 #include "sgx_urts.h"
+#include <poll.h>
 
 
 #ifndef TRUE
@@ -41,12 +42,19 @@ class Root {
 public:
     Root();
     ~Root();
-    Root(int total_primary, int total_replica, int total_passive, int total_node_address,sgx_enclave_id_t global_eid);
+    Root(uint32_t total_primary, uint32_t total_replica, uint32_t total_passive, uint32_t total_node_address,sgx_enclave_id_t global_eid);
 
     void start();
 
+    void initialisation(int * node_addresses);
+    void Prepare(int sockfd, int SerialNumber);
+    void Commit(int sockfd, int SerialNumber);
+
+
 private:
-    int total_primary, total_replica, total_passive,total_node_address;
+    uint32_t total_primary, total_replica, total_passive,total_node_address;
+
+
 
 
 

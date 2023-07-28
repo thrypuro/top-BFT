@@ -51,9 +51,8 @@ Sample file generated:
     }
 }
 """
-def generate_node_addresses(total_node_addresses):
+def generate_node_addresses(total_node_addresses, start_port=8081):
     node_addresses = {}
-    start_port = 8081
     for i in range(total_node_addresses):
         node_addresses[i] = {}
         node_addresses[i]["ip"] = default_ip
@@ -100,7 +99,9 @@ def main():
     root_committee = generate_root_committee_json(total_node_addresses,
                                                   partition_num, replica_num, passive_num, message_counter, message_size, leader_failure_rate, all_failure_rate)
     save_json_file(root_committee, "Primary_config.json")
+    client_nodes = generate_node_addresses(1, start_port=9000)
 
+    save_json_file(client_nodes, "client_addresses.json")
     # replica = generate_replica_json(total_node_addresses, message_size)
     #
     # save_json_file(replica, "Replica_config.json")

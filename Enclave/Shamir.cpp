@@ -94,7 +94,7 @@ int64_t pow(int64_t base, int64_t exp, int64_t prime) {
     return res % prime;
 }
 
-
+// There is no minimum shares because for our case we need all the nodes combined in order to reconstruct the secret
 vector< point> Shamir :: split_secret(int64_t secret, int n) {
 
     vector<point> share;
@@ -125,23 +125,6 @@ vector< point> Shamir :: split_secret(int64_t secret, int n) {
     return share;
 }
 
-
-int64_t _divmod(int64_t num, int64_t den, int64_t p) {
-    int64_t inv, _;
-    int64_t gcd = xGCD(den, p, &inv, &_);
-    return (num * inv) % p;
-}
-
-
-int64_t PI(vector<int64_t> vals, int64_t prime) {
-    int64_t accum = 1;
-    for(int64_t v : vals) {
-        accum *= v;
-        accum = accum % prime;
-
-    }
-    return accum % prime;
-}
 
 
 
