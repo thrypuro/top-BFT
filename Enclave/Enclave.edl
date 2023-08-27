@@ -43,10 +43,19 @@ enclave {
         public void ecall_root_size(uint32_t L_size, uint32_t R_size);
         public void ecall_generate_PublicKey([out]uint8_t publicKey[64]);
         public void ecall_root_sharedKey([in]uint8_t publicKey[64]);
+        public void ecall_setLeaderPublicKey([in] uint8_t publicKey[64]);
         public void ecall_setNodeKey([in]uint8_t publicKey[64], int serial_index, int view_index);
         public void ecall_leader_issueSecret(int Serial_num, [out, size=len] char * encrypted_data, [out] uint8_t signature[64],size_t len);
-        public void ecall_request_secret([in,size=len] char * all_data, size_t len,[in] uint8_t signature[64], [in] uint8_t encrypted_data[48], [in] uint8_t iv[12], [in] uint8_t tag[16]);
+        public void ecall_request_secret([in,size=len] char * all_data, size_t len,[in] uint8_t signature[64], [in] uint8_t encrypted_data[52], [in] uint8_t iv[12], [in] uint8_t tag[16]);
         public void ecall_hash([in,size=src_len] char * p_src, uint32_t src_len, [out] uint8_t p_hash[32]);
+        public void ecall_call_counter([in,size=size_len]char * secret, uint32_t size_len,[in]uint8_t signature[64], int Serial_num, int counter_p, int view_num_p);
+        public void ecall_verify_counter( [in] uint8_t hash[32] ,[in] uint8_t signature[64],
+                                               uint32_t leader_view,uint32_t leader_counter,
+                                              [in] uint8_t encrypted_data[52], [in] uint8_t iv[12], [in] uint8_t tag[16]
+                                              ,[out] uint8_t secret_share[8], uint8_t verify
+                                              );
+        public void ecall_sign([in] uint8_t * p_data, uint32_t data_len,[out] uint8_t * p_signature);
+
     };
 
     /* 

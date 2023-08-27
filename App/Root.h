@@ -43,19 +43,14 @@ public:
     Root();
     ~Root();
     Root(uint32_t total_primary, uint32_t total_replica, uint32_t total_passive, uint32_t total_node_address,sgx_enclave_id_t global_eid);
-
     void start();
-
-    void initialisation(int * node_addresses);
-    void Prepare(int sockfd, int SerialNumber);
-    void Commit(int sockfd, int SerialNumber);
 
 
 private:
+    void initialisation(int * node_addresses);
+    void Prepare(int sockfd, int SerialNumber);
+    void Commit(int sockfd, int SerialNumber);
     uint32_t total_primary, total_replica, total_passive,total_node_address;
-
-
-
 
 
 };

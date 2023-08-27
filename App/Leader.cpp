@@ -4,10 +4,10 @@
 
 #include "Leader.h"
 #include "utils.h"
-
 #include <iostream>
-
 #include <string>
+
+using  std :: cout , std :: endl, std :: string, std :: to_string, std :: hex, std :: strcpy, std :: strcat;
 
 
 /* Global EID shared by multiple threads */
@@ -22,28 +22,20 @@ const uint32_t iv_size = 12;
 const uint32_t tag_size = 16;
 const uint32_t total_size = (concat_size + iv_size + tag_size);
 
-using namespace std;
 
 
 Leader::~Leader() {}
 
 
 
-Leader ::Leader( int node_index,int total_replica_nodes,
+Leader ::Leader( int node_index, int serial_number,
+                 int total_replica_nodes,
                  int total_passive_nodes, sgx_enclave_id_t  global_eid){
     this->total_replica_nodes = total_replica_nodes;
     this->total_passive_nodes = total_passive_nodes;
     this->node_index = node_index;
+    this -> serial_number = serial_number;
     global_eid_root = global_eid;
-}
-
-void fulfill_client_request(const string& request, char * output){
-
-    if (request == "NOP"){
-
-        strcpy(output, "Did nothing");
-    }
-
 }
 
 
@@ -94,6 +86,8 @@ void Leader :: run (){
 
     uint8_t root_public_key [public_key_size];
 
+
+
     receive_message(root_address, root_public_key, public_key_size);
 
     cout << "Leader received root public key" << root_public_key << endl;
@@ -109,7 +103,7 @@ void Leader :: run (){
         send_message(replica_address[i], root_public_key, 64);
     }
 
-    uint8_t  public_key[64];
+    uint8_t  public_key[public_key_size];
     // Generate leader's public key and shared key with root
     ecall_generate_PublicKey(global_eid_root, public_key);
 
@@ -120,6 +114,7 @@ void Leader :: run (){
     send_message(root_address, public_key, public_key_size);
     for (int i = 0; i < total_replica_nodes; i++) {
         uint8_t  temp_public_key[64];
+        send_message(replica_address[i], public_key, 64);
         receive_message(replica_address[i], temp_public_key, public_key_size);
         send_message(root_address, temp_public_key, public_key_size);
     }
@@ -129,11 +124,13 @@ void Leader :: run (){
      * Initialisation Phase done
      */
 
-    /**
-     * Pre-prepare phase
-     */
 
     // while (true){
+
+    /**
+    * Pre-prepare phase
+    */
+
 
     // Leader receives a request from client
 
@@ -143,11 +140,11 @@ void Leader :: run (){
 
     // Leader Request a set of secret-shares from the root node
 
-    char * message = "request";
+    char  message[] = "request";
     send_message(root_address, (uint8_t *)message, 8);
 
     nlohmann::json j2;
-    receive_json( root_address, &j2);
+    receive_json( root_address, j2);
 
     cout << "Leader received json from root" << endl;
     cout << j2 << endl;
@@ -157,7 +154,8 @@ void Leader :: run (){
     string iv = j2["0"]["iv"];
     string tag = j2["0"]["tag"];
     string signature = j2["signature"];
-// print replica addresses
+
+    // print replica addresses
 
     // hex to string to uint8_t
 
@@ -180,7 +178,7 @@ void Leader :: run (){
 
 
     char all_data[total_size*(total_replica_nodes+1)];
-    for (int i = 0; i < concat_size; i++) {
+    for (uint32_t i = 0; i < concat_size; i++) {
         all_data[i] = 0;
     }
     json_to_alldata( j2, all_data, total_replica_nodes);
@@ -194,23 +192,25 @@ void Leader :: run (){
     for (int i = 0; i < total_replica_nodes; i++) {
 
         nlohmann::json j3 = j2[to_string(i+1)];
-// deep copy j2[i+1] to j3
         cout << "Sending prepare to replica " << replica_address[i] << endl;
-        send_json(replica_address[i], j3);
+        send_json(replica_address[i], j3,j3.dump().size());
 
     }
 
     // fulfill client request
-    char output[100];
-    fulfill_client_request(request["operation"], output);
+    char output[100] = {0};
+    string client_request = request["operation"];
+    fulfill_client_request(client_request, output);
     cout << "Client request fulfilled" << endl;
     // concatenate output with the request json string
-    char output_request[200];
-    strcpy(output_request, request.dump().c_str());
+    char output_request[200] = {0};
+    strcpy(output_request, client_request.c_str());
     strcat(output_request, output);
 
+    cout << "\nOutput is " << output_request << "\n";
+
     // hash output_request
-    uint8_t hash[hash_size];
+    uint8_t hash[hash_size] = {0};
     ecall_hash(global_eid_root, output_request, (uint32_t) sizeof(output_request), hash);
 
     // print hash
@@ -219,10 +219,32 @@ void Leader :: run (){
         cout << hex << (int) i;
     }
     cout << "\n";
+    int counter, view;
+    counter = 0;
+    view = 0;
+//    void ecall_call_counter(char * secret, uint32_t size_len,uint8_t signature[signature_size], int Serial_num, int counter_p, int view_num_p)
+    uint8_t signature1[signature_size];
+    ecall_call_counter(global_eid_root, (char *) hash, hash_size, signature1, serial_number, counter, view);
 
+    nlohmann::json pre_prepare_message;
+    pre_prepare_message["request"] = request;
+    nlohmann::json j5;
+    j5["leader_hash"] = hash;
+    j5["leader_signature"] = signature1;
+    j5["leader_view"] = view;
+    j5["leader_counter"] = counter;
+    pre_prepare_message["leader"] = j5;
 
+    // send pre-prepare message to replicas
+    for (int i = 0; i < total_replica_nodes; i++) {
+        send_json(replica_address[i], pre_prepare_message,pre_prepare_message.dump().size());
+    }
+    cout << "Pre-prepare message sent to replicas" << endl;
+    // Pre-prepare stage done
 
+    // Prepare stage
 
+    
 
 
     // }

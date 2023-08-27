@@ -39,12 +39,12 @@ public:
 
     ~Leader();
 
-    Leader(int node_index, int total_replica_nodes, int total_passive_nodes, sgx_enclave_id_t global_eid);
+    Leader(int node_index,int serial_number, int total_replica_nodes, int total_passive_nodes, sgx_enclave_id_t global_eid);
 
     void run();
 
 private:
-    int node_index,total_replica_nodes, total_passive_nodes;
+    int node_index,total_replica_nodes, total_passive_nodes,serial_number;
 
 };
 

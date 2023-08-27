@@ -51,6 +51,12 @@ void Root::initialisation(int *primary_address) {
 
     ecall_generate_PublicKey(global_eid_leader, publicKey);
 
+    // print public key in hex with printf
+    printf("Public key is ");
+    for (int i = 0; i < 64; i++) {
+        printf("%02x", publicKey[i]);
+    }
+    printf("\n");
 
     // send public key to all primary nodes
     for (int i = 0; i < total_primary; i++) {
@@ -115,14 +121,14 @@ void Root::Prepare(int sockfd, int SerialNumber) {
          *  convert the data to hex before sending
          *
          */
-        for (int j = 0; j < total_replica + 1; j++) {
+        for (size_t j = 0; j < total_replica + 1; j++) {
             nlohmann::json j3;
-            j3["encrypted_data"] = string_to_hex(string((char *) secret_shares + (j * total_size), 48));
+            j3["encrypted_data"] = string_to_hex(string((char *) secret_shares + (j * total_size), concat_size));
             j3["iv"] = string_to_hex(string((char *) secret_shares + (j * total_size) + encrypted_size, iv_size));
             j3["tag"] = string_to_hex(string((char *) secret_shares + (j * total_size) + encrypted_size + iv_size, tag_size));
             j2[to_string(j)] = j3;
         }
-        send_json(sockfd, j2);
+        send_json(sockfd, j2,j2.dump().size());
 
 }
 

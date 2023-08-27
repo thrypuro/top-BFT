@@ -40,7 +40,7 @@ int setup_connection(int port, const char *ip_addr) {
 // open a port, bind and listen
 int start_port( int port ) {
     int sockfd;
-    struct sockaddr_in addr;
+    struct sockaddr_in addr{};
     int ret;
     int opt = 1;
     // Create socket
@@ -126,7 +126,7 @@ nlohmann::json read_json_file(const char *filename) {
 }
 
 // convert 64 bit uint to 8 bytes
-void uint64_to_bytes(uint64_t num, uint8_t * bytes)
+void uint64_to_bytes(uint64_t num, uint8_t bytes[8])
 {
     for (int i = 0; i < 8; i++)
     {
@@ -134,7 +134,7 @@ void uint64_to_bytes(uint64_t num, uint8_t * bytes)
     }
 }
 
-int send_json(int sockfd, nlohmann::json j)
+int send_json(int sockfd, nlohmann::json &j, size_t size)
 {
     std::string s = j.dump();
     // send size of message first so that receiver knows how much to receive
@@ -144,16 +144,18 @@ int send_json(int sockfd, nlohmann::json j)
     uint64_to_bytes( s.size(), bytes);
     send_message(sockfd, bytes, 8);
 
-    std :: cout << "Sending json " << s << std::endl;
-
+//    std :: cout << "Sending size of json " << s.size() << std::endl;
+//
+//    std :: cout << "Sending json " << s << std::endl;
    send_message(sockfd, (uint8_t *) s.c_str(), s.size());
 
     return 0;
 
 }
 
-int receive_json(int sockfd, nlohmann::json * j)
+int receive_json(int sockfd, nlohmann::json & j)
 {
+    std :: cout << "Receiving json from " << sockfd << std::endl;
     int size = 0;
         uint8_t bytes[8] = {0};
         receive_message(sockfd, bytes, 8);
@@ -165,14 +167,15 @@ int receive_json(int sockfd, nlohmann::json * j)
 
 
     std :: cout << "Size of json is " << size << std::endl;
-    auto *buffer = new uint8_t [size];
-     receive_message(sockfd, buffer, (int) size);
+
+    // make unique pointer
+    std :: unique_ptr<uint8_t []> buffer (new uint8_t [size]);
+
+     receive_message(sockfd, buffer.get(), (int) size);
+
      // print buffer
-     std :: cout << "Buffer is " << buffer << std::endl;
+    j = nlohmann::json::parse(buffer.get());
 
-    *j = nlohmann::json::parse(buffer);
-
-    delete [] buffer;
 
     return 0;
 }
@@ -239,4 +242,20 @@ void string_to_uint8( const std::string& input, size_t len, uint8_t * output)
     for (int i = 0; i < len; i++){
         output[i] = (uint8_t) input[i];
     }
+}
+
+void fulfill_client_request(const std::string& request, char * output){
+
+    if (request == "NOP"){
+
+        strcpy(output, "Did nothing");
+    }
+
+}
+
+
+void hex_to_uint8( const std::string& input, size_t len, uint8_t * output)
+{
+    std :: string s = hex_to_string(input);
+    string_to_uint8(s, len, output);
 }

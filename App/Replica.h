@@ -43,7 +43,13 @@ public:
 
     void run();
 private:
+
+    void Initialisation();
+    void Prepare();
+
     int partition_num, view_num,node_index,leader_index;
+    int leader_address, port;
+
 };
 
 

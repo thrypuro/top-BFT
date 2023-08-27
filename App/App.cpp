@@ -244,7 +244,7 @@ int SGX_CDECL main(int argc, char *argv[])
     }
     else if (node_index % total_nodes_in_partition == 0){
         // leader logic
-        Leader l = Leader(node_index,total_replica_nodes, total_passive_nodes, global_eid);
+        Leader l = Leader(node_index, serial_number, total_replica_nodes, total_passive_nodes, global_eid);
         cout << "Leader node" << endl;
         l.run();
     }
