@@ -73,16 +73,11 @@ for (uint32_t i = 0; i < (uint32_t) total_replica_nodes; i++) {
 
 }
 
-void Leader :: run (){
-
-    /**
-     * Initialisation phase
-     */
+void Leader :: Initialise(){
     nlohmann::json j1 = read_json_file("node_addresses.json");
 
-    int root_address = start_port(j1[to_string(node_index)] ["port"]);
+    root_address = start_port(j1[to_string(node_index)] ["port"]);
 
-    int replica_address[total_replica_nodes];
 
     uint8_t root_public_key [public_key_size];
 
@@ -98,8 +93,7 @@ void Leader :: run (){
         cout << "Replica index = " << node_index+1+ i << endl;
         string ip = j1[to_string(i)] ["ip"];
         int port  (j1[to_string(node_index+1+ i)] ["port"]);
-
-        replica_address[i] = setup_connection(port, ip.c_str());
+        replica_address.push_back(setup_connection(port, ip.c_str()));
         send_message(replica_address[i], root_public_key, 64);
     }
 
@@ -119,30 +113,12 @@ void Leader :: run (){
         send_message(root_address, temp_public_key, public_key_size);
     }
 
+}
 
-    /**
-     * Initialisation Phase done
-     */
-
-
-    // while (true){
-
-    /**
-    * Pre-prepare phase
-    */
-
-
-    // Leader receives a request from client
-
-    // fake client request for testing
-    nlohmann::json request = read_json_file("request.json");
-
-
-    // Leader Request a set of secret-shares from the root node
+void Leader::Pre_prepare(nlohmann::json request) {
 
     char  message[] = "request";
     send_message(root_address, (uint8_t *)message, 8);
-
     nlohmann::json j2;
     receive_json( root_address, j2);
 
@@ -240,6 +216,120 @@ void Leader :: run (){
         send_json(replica_address[i], pre_prepare_message,pre_prepare_message.dump().size());
     }
     cout << "Pre-prepare message sent to replicas" << endl;
+
+    // verify counter
+    uint8_t secret[8] = {0};
+    uint8_t verify;
+    ecall_verify_counter(global_eid_root, hash, signature1, view, counter,
+                         encrypted_data_uint8, iv_uint8, tag_uint8, secret, verify);
+
+    nlohmann::json prepare_messages;
+
+//    string s = "Prepare";
+//    // concat hash to s
+//    for (unsigned char i : hash) {
+//        s += i;
+//    }
+//    // concat secret to s
+//    for (unsigned char i : secret) {
+//        s += i;
+//    }
+//    uint8_t signature2[signature_size] = {0};
+//    ecall_sign(global_eid_root, (uint8_t *) s.c_str(), s.size(), signature2);
+
+    nlohmann::json j1;
+//    j1["signature"] = signature2;
+
+    j1["hash"] = string_to_hex(string((char *) hash, hash_size));
+    j1["secret"] = string_to_hex(string((char *) secret, 8));
+    j1["status"] = "Prepare";
+
+    prepare_messages["0"] = j1;
+
+    // print secret
+    cout << "\n Secret is " << to_string((uint64_t)secret) << endl;
+
+
+    /*
+     * {
+     * "0" : {
+     *
+     */
+
+    // prepare
+    // receive prepare message from replicas
+    for (int i = 0; i < total_replica_nodes; i++) {
+        nlohmann::json prepare_message;
+        receive_json(replica_address[i], prepare_message);
+        cout << "Leader received prepare message from replica " << i << endl;
+        cout << prepare_message << endl;
+        prepare_messages[to_string(i+1)] = prepare_message;
+    }
+
+    prepare_messages["request"] = request;
+    prepare_messages["output"] = output;
+    // send verify message to root
+
+    send_message(root_address, (uint8_t *) "verify", 8);
+
+    send_json(root_address, prepare_messages, prepare_messages.dump().size());
+
+
+}
+
+void Leader::Commit() {
+
+
+    // receive commit json from root
+    nlohmann::json commit_message;
+    receive_json(root_address, commit_message);
+
+    string block_hash = commit_message["block_hash"];
+    string secret = commit_message["secret"];
+
+    uint8_t hash[hash_size];
+    // hash block_hash + secret
+    string s = block_hash + secret;
+    ecall_hash(global_eid_root, (char *) s.c_str(), s.size(), hash);
+
+    send_message(root_address, (uint8_t *) "request", 8);
+
+
+
+}
+
+void Leader :: run (){
+
+    /**
+     * Initialisation phase
+     */
+
+    Initialise();
+    /**
+     * Initialisation Phase done
+     */
+
+
+    // while (true){
+
+    /**
+    * Pre-prepare phase
+    */
+    nlohmann::json request = read_json_file("request.json");
+
+    Pre_prepare(request);
+
+
+    // Leader Request a set of secret-shares from the root node
+
+    Commit();
+
+
+
+    // Leader receives a request from client
+
+    // fake client request for testing
+
     // Pre-prepare stage done
 
     // Prepare stage

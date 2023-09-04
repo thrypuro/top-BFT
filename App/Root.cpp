@@ -27,16 +27,13 @@ Root::Root() {};
 Root::~Root() {};
 
 Root::Root(uint32_t total_primary, uint32_t total_replica, uint32_t total_passive, uint32_t total_node_address, sgx_enclave_id_t global_eid
-) {
-    this->total_primary = total_primary;
-    this->total_replica = total_replica;
-    this->total_passive = total_passive;
-    this->total_node_address = total_node_address;
+)  : total_primary(total_primary), total_replica(total_replica), total_passive(total_passive), total_node_address(total_node_address)
+{
     global_eid_leader = global_eid;
     ecall_root_size(global_eid_leader, total_primary, total_replica);
 }
 
-void Root::initialisation(int *primary_address) {
+void Root::initialisation() {
     nlohmann::json j1 = read_json_file("node_addresses.json");
 
     for (uint32_t i = 0; i < total_node_address; i = i + total_replica + total_passive + 1) {
@@ -45,7 +42,7 @@ void Root::initialisation(int *primary_address) {
         // get the address of the ith primary node
         string ip = j1[s]["ip"];
         int port = j1[s]["port"];
-        primary_address[i] = setup_connection(port, ip.c_str());
+        primary_address.push_back(setup_connection(port, ip.c_str()));
     }
     uint8_t publicKey[public_key_size];
 
@@ -132,31 +129,102 @@ void Root::Prepare(int sockfd, int SerialNumber) {
 
 }
 
-void Root ::Commit(int sockfd, int SerialNumber) {
+void Root ::Verify(int sockfd, int SerialNumber) {
+    uint8_t signature[signature_size*(total_replica+1)];
+    uint8_t secret_shares[(7) * (total_replica + 1)];
+
+    nlohmann::json j2;
+    receive_json(sockfd, j2);
+    cout << "Received json\n" << j2 << "\n";
+
+    for (size_t j = 0; j < total_replica + 1; j++) {
+//        uint8_t temp_signature[signature_size] = {0};
+//        string signature_string = j2[to_string(j)]["signature"];
+//        string_to_uint8(signature_string, signature_size, temp_signature);\
+
+        // concat "Prepare" + hash + secret
+//        string data = "Prepare";
+//
+//        string hash = j2[to_string(j)]["hash"];
+//        string secret = j2[to_string(j)]["secret"];
+//        for (unsigned char i : hash) {
+//            data += i;
+//        }
+//        for (unsigned char i : secret) {
+//            data += i;
+//        }
+//
+//
+//        // verify signature
+//        uint8_t verify;
+//        //         public void ecall_root_verify( [in,size=data_len] uint8_t * p_data, uint32_t data_len, [in] uint8_t * p_signature,int Serial_num, int Replica_num,uint8_t verify);
+//
+//        ecall_root_verify(global_eid_leader, (uint8_t *) data.c_str(), data.size(), temp_signature, SerialNumber, j,
+//                          verify);
+
+        // retrieve secret shares
+        string secret_shares_string = j2[to_string(j)]["secret"];
+        hex_to_uint8(secret_shares_string, 8, secret_shares + (j * 8));
+    }
+
+    // verify secret
+    uint8_t verify[1];
+    long long secret[1];
+    // public void ecall_verify_secret([in,size=share_len] uint8_t * shares, uint32_t share_len, uint8_t verify )
+    ecall_verify_secret(global_eid_leader, secret_shares, 8 * (total_replica + 1), verify,secret);
+
+    if (verify[0] == 1) {
+        cout << "Secret verified" << endl;
+        // secret + request + request_output + hash+ counter + serial + view
+        string s = to_string(secret[0]);
+        s += j2["request"]["operation"];
+        s +=  j2["request"]["timestamp"];
+        s += j2["output"];
+        s += j2["0"]["hash"];
+        s += j2["0"]["counter"];
+        s += j2["0"]["serial"];
+        s += j2["0"]["view"];
+
+        // hash s
+        uint8_t hash[hash_size] = {0};
+        ecall_hash(global_eid_leader, (char *) s.c_str(), s.size(), hash);
+        string s_hash = string((char *) hash, hash_size);
+        blocks[s_hash] = s;
+
+        // send hash and secret to all primary nodes in the form of a json
+        nlohmann::json j3;
+        j3["hash"] = string_to_hex(s_hash);
+        j3["secret"] = string_to_hex(to_string(secret[0]));
+        for (int i = 0; i < total_primary; i++) {
+            send_json(primary_address[i], j3,j3.dump().size());
+        }
+
+    } else {
+        cout << "Secret not verified" << endl;
+    }
 
 }
 
 
 void Root::start() {
 
-    int primary_address[total_primary];
 
-    initialisation(primary_address);
+
+    initialisation();
 
     // print primary addresses
     for (int i = 0; i < total_primary; i++) {
         cout << "Primary address is " << primary_address[i] << endl;
     }
-    struct pollfd pfds[total_primary];
-
-    // once input is
-    for (int i = 0; i < total_primary; i++) {
-        pfds[i].fd = primary_address[i];
-        pfds[i].events = POLLIN;
-    }
 
 
     while (true) {
+        struct pollfd pfds[total_primary];
+        // once input is
+        for (int i = 0; i < total_primary; i++) {
+            pfds[i].fd = primary_address[i];
+            pfds[i].events = POLLIN;
+        }
 
         int num_events = poll(pfds, total_primary, -1);
         if (num_events == -1) {
@@ -164,7 +232,10 @@ void Root::start() {
             exit(EXIT_FAILURE);
         }
 
+
         for (int i = 0; i < total_primary; i++) {
+
+
             if (pfds[i].revents & POLLIN) {
                 // do stuff
                 cout << "Primary node " << i << " is ready to receive" << endl;
@@ -177,7 +248,9 @@ void Root::start() {
                     Prepare(primary_address[i],i);
                 } else if (!strcmp((char *) message, "verify")) {
 
+                    cout << "Received verify from primary node " << i << endl;
                     // verify signature and secret logic
+                    Verify(primary_address[i],i);
 
                 } else {
                     cout << "Unknown message received" << endl;

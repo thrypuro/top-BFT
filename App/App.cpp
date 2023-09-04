@@ -230,7 +230,6 @@ int SGX_CDECL main(int argc, char *argv[])
     }
 
 
-
     // Special index for Root node
     if (node_index == -1){
         // Root logic
@@ -238,18 +237,19 @@ int SGX_CDECL main(int argc, char *argv[])
 
         // Root(int total_primary, int total_replica, int total_passive)
         Root r = Root(total_primary_nodes, total_replica_nodes, total_passive_nodes
-                      , total_node_address, global_eid);
+                , total_node_address, global_eid);
         r.start();
 
     }
     else if (node_index % total_nodes_in_partition == 0){
         // leader logic
+
         Leader l = Leader(node_index, serial_number, total_replica_nodes, total_passive_nodes, global_eid);
         cout << "Leader node" << endl;
         l.run();
     }
     else if (node_index % total_nodes_in_partition <= total_replica_nodes){
-       // Replica logic
+        // Replica logic
         cout << "Replica node" << endl;
         int leader_index = node_index - (serial_number);
         // pesky edge case
@@ -257,11 +257,11 @@ int SGX_CDECL main(int argc, char *argv[])
             cout << "Leader index is less than 0" << endl;
             exit(1);
         }
-        Replica r = Replica(node_index,serial_number,view_number,leader_index, global_eid);
-        r.run();
+        auto r = new Replica(node_index,serial_number,view_number,leader_index, global_eid);
+        r->run();
     }
     else{
-       // Passive logic
+        // Passive logic
         cout << "Passive node" << endl;
     }
 

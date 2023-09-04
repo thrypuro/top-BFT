@@ -2,6 +2,6 @@
 
   "status": "request",
   "operation": "NOP",
-  "timestamp" : 42
+  "timestamp" : "42"
 
 }

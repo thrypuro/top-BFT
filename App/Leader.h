@@ -9,6 +9,9 @@
 #include "sgx_eid.h"     /* sgx_enclave_id_t */
 #include "Enclave_u.h"
 #include "sgx_urts.h"
+#include "json.hpp"
+
+#include<vector>
 
 #ifndef TRUE
 # define TRUE 1
@@ -43,9 +46,21 @@ public:
 
     void run();
 
+    void wait_for_request();
+
 private:
     int node_index,total_replica_nodes, total_passive_nodes,serial_number;
+    int root_address;
+    std::vector<int> replica_address;
 
+    void Initialise();
+
+
+    void Pre_prepare(nlohmann::basic_json<> request);
+
+    void Prepare();
+
+    void Commit();
 };
 
 

@@ -54,7 +54,12 @@ enclave {
                                               [in] uint8_t encrypted_data[52], [in] uint8_t iv[12], [in] uint8_t tag[16]
                                               ,[out] uint8_t secret_share[8], uint8_t verify
                                               );
-        public void ecall_sign([in] uint8_t * p_data, uint32_t data_len,[out] uint8_t * p_signature);
+        public void ecall_sign([in,size=data_len] uint8_t * p_data, uint32_t data_len,[out] uint8_t * p_signature);
+
+        public void ecall_verify([in,size=data_len] uint8_t * p_data, uint32_t data_len, [in] uint8_t * p_signature, uint8_t verify);
+
+        public void ecall_root_verify( [in,size=data_len] uint8_t * p_data, uint32_t data_len, [in] uint8_t * p_signature,int Serial_num, int Replica_num,uint8_t verify);
+        public void ecall_verify_secret([in,size=share_len] uint8_t * shares, uint32_t share_len, [out] uint8_t verify[1], [out] long long secret[1]);
 
     };
 

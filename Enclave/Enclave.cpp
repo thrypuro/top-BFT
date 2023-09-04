@@ -56,7 +56,7 @@ sgx_ec256_dh_shared_t root_shared_key;
 sgx_ec256_public_t leader_public_key;
 
 sgx_ec256_private_t private_key;
-sgx_ec256_public_t public_key;
+sgx_ec256_public_t root_public_key;
 
 
 std :: unique_ptr< uint32_t[] > Node_counter;
@@ -71,7 +71,10 @@ uint32_t view_local = 0;
 
 // Prime choosen randomly
 int64_t prime = 3219499371683451161;
+int64_t secret = 0;
 
+int64_t secret_local = 0;
+vector<point> shares_local;
 
 // const
 const uint32_t concat_size = 52;
@@ -82,6 +85,7 @@ const uint32_t encrypted_size = 52;
 const uint32_t iv_size = 12;
 const uint32_t tag_size = 16;
 const uint32_t total_size = (concat_size + iv_size + tag_size);
+const uint32_t secret_size = 7;
 
 using namespace std;
 
@@ -109,13 +113,13 @@ void ecall_setLeaderPublicKey(uint8_t publicKey[64])
 void ecall_generate_PublicKey( uint8_t publicKey[64])
 {
 
-    generate_key_pair( &private_key, &public_key);
+    generate_key_pair( &private_key, &root_public_key);
 
 
     for (int i = 0; i < 32; i++)
     {
-        publicKey[i] = public_key.gx[i] ;
-        publicKey[i+32] =  public_key.gy[i];
+        publicKey[i] = root_public_key.gx[i] ;
+        publicKey[i+32] =  root_public_key.gy[i];
     }
 
     // print public key
@@ -237,6 +241,7 @@ void generateSecret(int Serial_num, int64_t * secret, vector<point>  * shares,sg
         *secret = (*secret << 8) + randsecret[i];
     }
 
+    secret_local = *secret;
     // generate shares
     *shares = S.split_secret(*secret, TOTAL_REPLICAS+1);
 
@@ -271,7 +276,6 @@ void generateSecret(int Serial_num, int64_t * secret, vector<point>  * shares,sg
 void ecall_leader_issueSecret(int Serial_num, char * encrypted_data, uint8_t signature[64], size_t len) {
 
     // uint64_t secret, vector<point> shares,sgx_sha256_hash_t* h_ck , uint8_t c_t[4], uint8_t v_t[4]
-    int64_t secret = 0;
     vector<point> shares;
     sgx_sha256_hash_t h_ck;
     uint8_t c_t[4];
@@ -293,11 +297,16 @@ void ecall_leader_issueSecret(int Serial_num, char * encrypted_data, uint8_t sig
 
     generateSecret(Serial_num, &secret, &shares, &h_ck, c_t, v_t);
 
+    shares_local = shares;
+
     printf("secret is %llu\n", secret);
 
     // print shares, hash and counters
     for (int i = 0; i < TOTAL_REPLICAS + 1; i++) {
-        printf("share %d is (%llu, %llu)\n", i, shares[i].x, shares[i].y);
+//        printf("share %d is (%llu, %llu)\n", i, shares[i].x, shares[i].y); in hex
+        printf("for share %d\n", i);
+        printf("Share x = %02llx\n", shares[i].x);
+        printf("Share y = %02llx\n", shares[i].y);
     }
     printf("hash is ");
     for (int i = 0; i < 32; i++) {
@@ -327,20 +336,35 @@ void ecall_leader_issueSecret(int Serial_num, char * encrypted_data, uint8_t sig
     uint8_t temp_tag[TOTAL_REPLICAS + 1][SGX_AESGCM_MAC_SIZE];
     // encrypt E( share || h_ck || c_t || v_t )
     for (uint64_t i = 0; i < TOTAL_REPLICAS + 1; i++) {
-        uint64_t temp_secret_y = shares[i].y;
+        long long  temp_secret_y = shares[i].y;
+        uint8_t p_secret_y[8] = {0};
+        int jj = 0;
+        while (temp_secret_y > 0) {
+            p_secret_y[7-jj] = temp_secret_y % 256;
+            temp_secret_y = temp_secret_y / 256;
+            jj++;
+        }
+
+        // print p_secret_y
+        printf("p_secret_y is ");
+        for (int j = 0; j < 8; j++) {
+            printf("%02x", p_secret_y[j]);
+        }
+        printf("\n");
+
 
         uint8_t p_iv[tag_size];
         uint8_t temp_secret_y_bytes[8];
-        uint64_to_bytes(temp_secret_y, temp_secret_y_bytes);
+        uint64_to_bytes(static_cast<uint64_t>(temp_secret_y), temp_secret_y_bytes);
 
         uint8_t all_bytes[concat_size];
 
-        for (int j = 0; j < 8; j++) {
-            all_bytes[j] = temp_secret_y_bytes[j];
+        for (int j = 0; j < hash_size; j++) {
+            all_bytes[j] = h_ck[j];
         }
 
-        for (uint64_t j = 0; j < hash_size; j++) {
-            all_bytes[j + 8] = h_ck[j];
+        for (uint64_t j = 0; j < 8; j++) {
+            all_bytes[j + hash_size] = p_secret_y[j];
         }
 
         for (uint64_t j = 0; j < 4; j++) {
@@ -467,7 +491,7 @@ void ecall_request_secret(char * all_data, size_t len,uint8_t signature[signatur
 
     // verify signature
     sgx_ec256_signature_t signature1 = *(sgx_ec256_signature_t *) signature;
-    verify_signature(&public_key, (uint8_t *) all_data, len, &signature1);
+    verify_signature(&root_public_key, (uint8_t *) all_data, len, &signature1);
 
     // decrypt encrypted_data
     uint8_t key[16];
@@ -615,21 +639,26 @@ void ecall_verify_counter(uint8_t hash[hash_size] ,uint8_t signature[signature_s
 
     for (int i = 0; i < 32; i++)
     {
-        l_hash[i] = decrypted_data[i+8];
+        l_hash[i] = decrypted_data[i];
     }
     for (int i = 0; i < 4; i++)
     {
-        counter = (counter << 8) + decrypted_data[i+40];
+        counter = (counter << 8) + decrypted_data[i+32+7];
     }
     for (int i = 0; i < 4; i++)
     {
         view_counter_l = (view_counter_l << 8) + decrypted_data[i+44];
     }
+    printf("\n");
+
     for (int i = 0; i < 8; i++)
     {
-        secret[i] = decrypted_data[i];
+        secret[i] = decrypted_data[i+hash_size];
+        // print decrypted_data[i+hash_size]
+        printf("%02x", decrypted_data[i+hash_size]);
     }
 
+    printf("\n");
 
     // if (c′_k , v′_k , s′_k )̸ = (c_k , v_k , s_k ) then “ invalid ordering”;
     if ( counter != leader_counter ){
@@ -750,4 +779,78 @@ void ecall_hash(char * p_src, uint32_t src_len, uint8_t * p_hash)
 void ecall_sign(uint8_t * p_data, uint32_t data_len, uint8_t * p_signature)
 {
     sign_message(&private_key, p_data, data_len, (sgx_ec256_signature_t *) p_signature);
+}
+
+
+void ecall_verify(uint8_t * p_data, uint32_t data_len, uint8_t * p_signature, uint8_t verify)
+{
+    verify_signature(&root_public_key, p_data, data_len, (sgx_ec256_signature_t *) p_signature);
+    verify = 1;
+}
+
+void ecall_root_verify( uint8_t * p_data, uint32_t data_len, uint8_t * p_signature,int Serial_num, int Replica_num,uint8_t verify)
+{
+    sgx_ec256_public_t temp_public_key;
+    // copy from  p_public_key[Serial_num * TOTAL_LEADERS + Replica_num * TOTAL_REPLICAS];
+    for (int i = 0; i < 32; i++)
+    {
+        temp_public_key.gx[i] = p_public_key[Serial_num * TOTAL_LEADERS + Replica_num * TOTAL_REPLICAS].gx[i];
+        temp_public_key.gy[i] = p_public_key[Serial_num * TOTAL_LEADERS + Replica_num * TOTAL_REPLICAS].gy[i];
+    }
+    verify_signature(&temp_public_key, p_data, data_len, (sgx_ec256_signature_t *) p_signature);
+    verify = 1;
+}
+
+void ecall_verify_secret(uint8_t * shares,uint32_t share_len, uint8_t verify[1], long long secret[1] ){
+
+    // print secret
+    printf("secret is %llu\n", secret_local);
+    // print uint8_t * shares
+    for (int i = 0; i < share_len; i++)
+    {
+        printf("%02x", shares[i]);
+    }
+    printf("\n");
+
+
+    Shamir S = Shamir(prime);
+    vector<point> shares1;
+    for (int i = 8; i < share_len+1; i=i+8)
+    {
+        long long  x = i>>3;
+        long long  y = 0;
+        for (int j = 0; j < 8; j++)
+        {
+            y = (y << 8) + shares[(x-1)*8 + j];
+        }
+
+        shares1.push_back(point{x,y});
+    }
+
+
+
+    auto s = S.reconstruct_secret(shares1);
+
+    if ( s != secret_local ){
+        verify[0] = 0;
+        printf("Verify secret failed\n");
+        // print shares1 and shares local
+        for (int i = 0; i < TOTAL_REPLICAS + 1; i++) {
+            printf("share %d is (%llu, %llu)\n", i, shares1[i].x, shares1[i].y);
+        }
+        for (int i = 0; i < TOTAL_REPLICAS + 1; i++) {
+            printf("share %d is (%llu, %llu)\n", i, shares_local[i].x, shares_local[i].y);
+        }
+        // print local secret and secret
+        printf("local secret is %llu\n", secret_local);
+        printf("wrong secret is %llu\n", s);
+        secret[0] = secret_local;
+
+    }
+    else{
+        verify[0] = 1;
+        printf("Verify secret success\n");
+    }
+
+
 }

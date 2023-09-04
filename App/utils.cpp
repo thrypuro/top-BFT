@@ -42,7 +42,11 @@ int start_port( int port ) {
     int sockfd;
     struct sockaddr_in addr{};
     int ret;
-    int opt = 1;
+    struct timeval tv;
+    tv.tv_sec = 10;
+    tv.tv_usec = 0;
+
+
     // Create socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
@@ -50,7 +54,7 @@ int start_port( int port ) {
         return -1;
     }
     // Set socket options
-    ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
+    ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, (const char*)&tv, sizeof tv);
     if (ret < 0) {
         printf("Error setting socket options\n");
         return -1;
@@ -111,6 +115,12 @@ int receive_message(int sockfd, uint8_t *message, int size) {
         printf("Error receiving message\n");
         exit(1);
     }
+    // make sure to use the same size as the message
+    if (ret != size) {
+        printf("Error receiving message\n");
+        exit(1);
+    }
+
     return 0;
 }
 
@@ -144,9 +154,9 @@ int send_json(int sockfd, nlohmann::json &j, size_t size)
     uint64_to_bytes( s.size(), bytes);
     send_message(sockfd, bytes, 8);
 
-//    std :: cout << "Sending size of json " << s.size() << std::endl;
+    std :: cout << "Sending size of json " << s.size() << std::endl;
 //
-//    std :: cout << "Sending json " << s << std::endl;
+    std :: cout << "Sending json " << s << std::endl;
    send_message(sockfd, (uint8_t *) s.c_str(), s.size());
 
     return 0;
@@ -164,17 +174,28 @@ int receive_json(int sockfd, nlohmann::json & j)
         }
 
 
-
-
     std :: cout << "Size of json is " << size << std::endl;
 
     // make unique pointer
-    std :: unique_ptr<uint8_t []> buffer (new uint8_t [size]);
+    auto buffer =  new uint8_t [size];
+    auto buffer_2 =  new uint8_t [size];
 
-     receive_message(sockfd, buffer.get(), (int) size);
+     receive_message(sockfd, buffer, (int) size);
+
+     std::cout << "Received json " << buffer << "\n";
+//     for (int i = 0; i < size; i++){
+//         std :: cout <<  buffer[i] << std :: endl;
+//     }
+
+for (int i = 0; i < size; i++){
+        buffer_2[i] = buffer[i];
+}
+// null terminate
+buffer_2[size] = '\0';
+
 
      // print buffer
-    j = nlohmann::json::parse(buffer.get());
+    j = nlohmann::json::parse(buffer_2);
 
 
     return 0;

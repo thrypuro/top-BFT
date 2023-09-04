@@ -136,26 +136,33 @@ j5["leader_counter"] = counter;
     }
     cout << "Hashes match" << endl;
 
-    string s = "Prepare";
-    // concat hash to s
-    for (unsigned char i : hash) {
-        s += i;
-    }
-    // concat secret to s
-    for (unsigned char i : secret) {
-        s += i;
-    }
-    // sign s
-    uint8_t signature[signature_size] = {0};
-    ecall_sign(global_eid_replica , (uint8_t *) s.c_str() , (uint32_t) s.size() , signature);
+//    string s = "Prepare";
+//    // concat hash to s
+//    for (unsigned char i : hash) {
+//        s += i;
+//    }
+//    // concat secret to s
+//    for (unsigned char i : secret) {
+//        s += i;
+//    }
+//
+//
+//    // sign s
+//    uint8_t signature[signature_size] = {0};
+//    auto p_data = (uint8_t *) s.c_str();
+//    auto data_len = (uint32_t) s.size();
+
+//    ecall_sign(global_eid_replica , p_data , data_len , signature);
+//    cout << "Signed" << signature << "\n";
 
     nlohmann::json j6;
 
-    j6["replica_signature"] = string_to_hex(string((char *) signature , 64));
-    j6["replica_secret"] = string_to_hex(string((char *) secret , 8));
-    j6["replica_hash"] = string_to_hex(string((char *) hash , 32));
+//    j6["signature"] = string_to_hex(string((char *) signature , 64));
+    j6["secret"] = string_to_hex(string((char *) secret , 8));
+    j6["hash"] = string_to_hex(string((char *) hash , 32));
     j6["status"] = "Prepare";
 
+    cout << "Sending json\n" << j6 << "\n";
     send_json(leader_address , j6 , j6.dump().size());
 
 }

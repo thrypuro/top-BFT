@@ -14,6 +14,8 @@
 #include "Enclave_u.h"
 #include "sgx_urts.h"
 #include <poll.h>
+#include <vector>
+#include <bits/stdc++.h>
 
 
 #ifndef TRUE
@@ -47,12 +49,14 @@ public:
 
 
 private:
-    void initialisation(int * node_addresses);
+    void initialisation();
     void Prepare(int sockfd, int SerialNumber);
-    void Commit(int sockfd, int SerialNumber);
     uint32_t total_primary, total_replica, total_passive,total_node_address;
 
+    std::vector <int> primary_address;
+    void Verify(int sockfd, int SerialNumber);
 
+    std::map<std::string, std::string> blocks;
 };
 
 
